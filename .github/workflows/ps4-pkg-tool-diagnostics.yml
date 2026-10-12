@@ -1,0 +1,39 @@
+name: PS4 PKG Tool Diagnostics
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/ps4-pkg-tool-diagnostics.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect OpenOrbis PKG tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -uo pipefail
+            SDK=/lib/OpenOrbisSDK
+            {
+              echo "=== SDK packaging executables ==="
+              find "$SDK" -maxdepth 6 -type f \( -iname "*pkg*" -o -iname "*sfo*" -o -iname "*gp4*" \) -print | head -100
+              echo "=== PkgTool.Core file type ==="
+              file "$SDK/bin/linux/PkgTool.Core" || true
+              ls -lh "$SDK/bin/linux/PkgTool.Core" || true
+              echo "=== PkgTool.Core help ==="
+              timeout 20 "$SDK/bin/linux/PkgTool.Core" --help 2>&1 || true
+              echo "=== PkgTool.Core no-arg usage ==="
+              timeout 20 "$SDK/bin/linux/PkgTool.Core" 2>&1 || true
+              echo "=== Related SDK samples and scripts ==="
+              find "$SDK" -maxdepth 5 -type f \( -iname "*.gp4" -o -iname "*.sfo" -o -iname "*pkg*.sh" \) -print | head -80
+            } | tee out/pkg-tool-diagnostics.txt
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ps4-pkg-tool-diagnostics
+          path: out/pkg-tool-diagnostics.txt
