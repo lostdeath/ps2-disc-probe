@@ -27,7 +27,8 @@ jobs:
             command -v orbis-ld || true
             echo "PATH=$PATH"
             echo "Attempting link; failures here are diagnostic and will fail the workflow"
-            clang -v -target x86_64-scei-ps4 -L"$SDK/lib" out/disc_probe_ps4.o -o out/disc_probe_ps4.elf
+            echo "Using installed ld.lld directly as an experimental fallback"
+            /usr/bin/ld.lld -m elf_x86_64 -o out/disc_probe_ps4.elf -e main out/disc_probe_ps4.o -L"$SDK/lib" -lc -lkernel
             test -s out/disc_probe_ps4.elf
             echo "Linked PS4 ELF candidate successfully; not yet a loadable homebrew or PKG"
           ' 2>&1 | tee out/link.log
