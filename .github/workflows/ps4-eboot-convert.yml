@@ -1,0 +1,37 @@
+name: PS4 EBOOT Conversion Experiment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile, link, and attempt EBOOT conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            /usr/bin/ld.lld -m elf_x86_64 -o out/disc_probe_ps4.elf -e main out/disc_probe_ps4.o -L"$SDK/lib" -lc -lkernel
+            test -s out/disc_probe_ps4.elf
+            echo "=== CONVERT TO EBOOT ==="
+            "$SDK/bin/linux/create-eboot" -in out/disc_probe_ps4.elf -out out/eboot.bin -ptype fake
+            test -s out/eboot.bin
+            echo "=== OUTPUT HEADER ==="
+            "$SDK/bin/linux/readelf" -h out/eboot.bin || true
+            ls -lh out/disc_probe_ps4.elf out/eboot.bin
+            echo "EBOOT conversion experiment succeeded; PS4 launch compatibility not yet verified."
+          ' 2>&1 | tee out/eboot-conversion-log.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload experimental EBOOT and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-eboot-conversion-experiment
+          path: out/
