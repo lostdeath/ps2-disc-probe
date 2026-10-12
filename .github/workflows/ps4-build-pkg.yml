@@ -1,0 +1,66 @@
+name: Build PS4 Disc Probe PKG
+on:
+  push:
+    paths:
+      - .github/workflows/ps4-build-pkg.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pkg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and package disc probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK=/lib/OpenOrbisSDK
+            clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$SDK" -isystem "$SDK/include" -c src/disc_probe.c -o out/probe.o
+            cat > out/process_param.c <<EOF
+          __attribute__((used,section(".data.sce_process_param"),aligned(8)))
+          unsigned long long ps2_probe_process_param[3] = {0x18ULL,0x13C13F4BFULL,0x1000051ULL};
+          EOF
+            clang --target=x86_64-pc-freebsd12-elf -fPIC -isysroot "$SDK" -c out/process_param.c -o out/process_param.o
+            ld.lld -m elf_x86_64 -pie --script "$SDK/link.x" --eh-frame-hdr -L"$SDK/lib" out/probe.o out/process_param.o -o out/probe.elf -lc -lkernel -lc++ "$SDK/lib/crt1.o"
+            mkdir -p out/pkgroot/sce_sys
+            "$SDK/bin/linux/create-eboot" -in out/probe.elf -out out/pkgroot/eboot.bin -ptype fake
+            cp "$SDK/bin/data/param.sfo" out/pkgroot/sce_sys/param.sfo
+            TOOL="$SDK/bin/linux/PkgTool.Core"
+            "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
+            "$TOOL" sfo_setentry --value "PS2 Disc Probe" out/pkgroot/sce_sys/param.sfo TITLE
+            "$TOOL" sfo_setentry --value "UP0001-PS2DPROBE_00-PS2DISCPROBE0000" out/pkgroot/sce_sys/param.sfo CONTENT_ID
+            "$TOOL" sfo_setentry --value "PS2D00001" out/pkgroot/sce_sys/param.sfo TITLE_ID
+            cat > out/disc-probe.gp4 <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <psproject fmt="gp4" version="1000">
+            <volume>
+              <volume_type>pkg_ps4_app</volume_type>
+              <volume_id>PS4VOLUME</volume_id>
+              <volume_ts>2026-10-12 00:00:00</volume_ts>
+              <package content_id="UP0001-PS2DPROBE_00-PS2DISCPROBE0000" passcode="00000000000000000000000000000000" storage_type="digital50"/>
+            </volume>
+            <files>
+              <file targ_path="eboot.bin" orig_path="pkgroot/eboot.bin"/>
+              <file targ_path="sce_sys/param.sfo" orig_path="pkgroot/sce_sys/param.sfo"/>
+            </files>
+          </psproject>
+          EOF
+            cd out
+            "$TOOL" pkg_build disc-probe.gp4 .
+            find . -maxdepth 2 -type f -name "*.pkg" -exec "$TOOL" pkg_validate {} \;
+            test -n "$(find . -maxdepth 2 -type f -name "*.pkg" -print -quit)"
+          '
+      - name: Upload PKG or diagnostic outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-disc-probe-pkg-attempt
+          path: |
+            out/*.pkg
+            out/*.gp4
+            out/probe.elf
+            out/pkgroot/eboot.bin
