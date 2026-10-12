@@ -1,0 +1,53 @@
+name: PS4 EBOOT ELF Layout Experiments
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Try alternative ELF layouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -u
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/OpenOrbisSDK}"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -c src/disc_probe.c -o out/disc_probe.o || exit 1
+            successes=0
+            for variant in exec_pie exec_fixed pie_no_relro pie_single_segment; do
+              echo "=== VARIANT $variant ==="
+              case "$variant" in
+                exec_pie) flags="-pie" ;;
+                exec_fixed) flags="-no-pie" ;;
+                pie_no_relro) flags="-pie -z norelro" ;;
+                pie_single_segment) flags="-pie --no-rosegment -z norelro" ;;
+              esac
+              if /usr/bin/ld.lld -m elf_x86_64 $flags -e _start -o "out/$variant.elf" "$SDK/lib/crt1.o" "$SDK/lib/crti.o" out/disc_probe.o -L"$SDK/lib" -lc -lkernel "$SDK/lib/crtn.o"; then
+                readelf -hW "out/$variant.elf" | grep -E "Type:|Entry point|Number of program headers" || true
+                readelf -lW "out/$variant.elf" | grep -E "LOAD|DYNAMIC|TLS|GNU_RELRO" || true
+                if "$SDK/bin/linux/create-eboot" -in "out/$variant.elf" -out "out/$variant.eboot.bin" -ptype fake; then
+                  echo "CONVERSION SUCCESS: $variant"
+                  successes=$((successes+1))
+                else
+                  echo "CONVERSION FAILED: $variant"
+                fi
+              else
+                echo "LINK FAILED: $variant"
+              fi
+            done
+            echo "=== RESULTS ==="
+            echo "Successful conversions: $successes"
+            if [ "$successes" -eq 0 ]; then exit 1; fi
+          ' 2>&1 | tee out/layout-experiments.log
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload experiments
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-eboot-layout-experiments
+          path: out/
