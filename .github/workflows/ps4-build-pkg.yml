@@ -43,6 +43,9 @@ jobs:
               <volume_ts>2026-10-12 00:00:00</volume_ts>
               <package content_id="UP0001-PS2DPROBE_00-PS2DISCPROBE0000" passcode="00000000000000000000000000000000" storage_type="digital50"/>
             </volume>
+            <rootdir>
+              <dir targ_name="sce_sys"/>
+            </rootdir>
             <files>
               <file targ_path="eboot.bin" orig_path="pkgroot/eboot.bin"/>
               <file targ_path="sce_sys/param.sfo" orig_path="pkgroot/sce_sys/param.sfo"/>
