@@ -1,0 +1,30 @@
+name: PS4 Native Compile Experiment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ps4-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile probe using OpenOrbis SDK
+        run: |
+          docker pull openorbisofficial/toolchain:latest
+          mkdir -p out
+          docker run --rm -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euxo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            echo "SDK=$SDK"
+            ls "$SDK/include" "$SDK/lib" || true
+            clang --version
+            # Compile only: linking and packaging need a PS4-specific entrypoint and libraries.
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            file out/disc_probe_ps4.o
+          ' 2>&1 | tee out/compile.log
+      - name: Upload compile log and object if available
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-native-compile-experiment-not-pkg
+          path: out/
