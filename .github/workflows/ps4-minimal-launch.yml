@@ -23,10 +23,16 @@ jobs:
             TOOL="$SDK/bin/linux/PkgTool.Core"
             mkdir -p out/minpkg/sce_sys out/minpkg/sce_module
             cat > out/minimal.c <<EOF
+          #include <stdio.h>
+          #include <unistd.h>
           int main(void) {
-            volatile unsigned long x = 0;
-            for (unsigned long i = 0; i < 1000000UL; i++) x += i;
-            return (int)(x == 0);
+            FILE *f = fopen("/data/ps4_minimal_launch.txt", "w");
+            if (f) {
+              fputs("Minimal PS4 launch test reached main\\n", f);
+              fclose(f);
+            }
+            sleep(30);
+            return 0;
           }
           EOF
             clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$SDK" -isystem "$SDK/include" -c out/minimal.c -o out/minimal.o
