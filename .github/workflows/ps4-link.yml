@@ -22,8 +22,12 @@ jobs:
             echo "Object compiled; inspecting SDK libraries and linker"
             ls "$SDK/lib"
             command -v ld.lld || true
+            echo "Checking OpenOrbis linker candidates"
+            find "$SDK" -type f \( -name "orbis-ld" -o -name "*ld*" \) -print | grep -E "(bin/|orbis-ld)" || true
+            command -v orbis-ld || true
+            echo "PATH=$PATH"
             echo "Attempting link; failures here are diagnostic and will fail the workflow"
-            clang -target x86_64-scei-ps4 -L"$SDK/lib" out/disc_probe_ps4.o -o out/disc_probe_ps4.elf
+            clang -v -target x86_64-scei-ps4 -L"$SDK/lib" out/disc_probe_ps4.o -o out/disc_probe_ps4.elf
             test -s out/disc_probe_ps4.elf
             echo "Linked PS4 ELF candidate successfully; not yet a loadable homebrew or PKG"
           ' 2>&1 | tee out/link.log
