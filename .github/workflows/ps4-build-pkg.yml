@@ -26,7 +26,9 @@ jobs:
           EOF
             clang --target=x86_64-pc-freebsd12-elf -fPIC -isysroot "$SDK" -c out/process_param.c -o out/process_param.o
             ld.lld -m elf_x86_64 -pie --script "$SDK/link.x" --eh-frame-hdr -L"$SDK/lib" out/probe.o out/process_param.o -o out/probe.elf -lc -lkernel -lc++ "$SDK/lib/crt1.o"
-            mkdir -p out/pkgroot/sce_sys
+            mkdir -p out/pkgroot/sce_sys out/pkgroot/sce_module
+            cp "$SDK/bin/data/modules/libc.prx" out/pkgroot/sce_module/libc.prx
+            cp "$SDK/bin/data/modules/libSceFios2.prx" out/pkgroot/sce_module/libSceFios2.prx
             "$SDK/bin/linux/create-eboot" -in out/probe.elf -out out/pkgroot/eboot.bin -ptype fake
             cp "$SDK/bin/data/param.sfo" out/pkgroot/sce_sys/param.sfo
             TOOL="$SDK/bin/linux/PkgTool.Core"
@@ -50,10 +52,13 @@ jobs:
             </volume>
             <rootdir>
               <dir targ_name="sce_sys"/>
+              <dir targ_name="sce_module"/>
             </rootdir>
             <files img_no="0">
               <file targ_path="eboot.bin" orig_path="pkgroot/eboot.bin"/>
               <file targ_path="sce_sys/param.sfo" orig_path="pkgroot/sce_sys/param.sfo"/>
+              <file targ_path="sce_module/libc.prx" orig_path="pkgroot/sce_module/libc.prx"/>
+              <file targ_path="sce_module/libSceFios2.prx" orig_path="pkgroot/sce_module/libSceFios2.prx"/>
             </files>
           </psproject>
           EOF
