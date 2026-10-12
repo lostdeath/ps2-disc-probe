@@ -16,6 +16,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
+          python3 scripts/generate_icon.py out/pkgroot/sce_sys/icon0.png
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
             set -euo pipefail
             SDK=/lib/OpenOrbisSDK
@@ -32,12 +33,18 @@ jobs:
             "$SDK/bin/linux/create-eboot" -in out/probe.elf -out out/pkgroot/eboot.bin -ptype fake -paid 4035225266123964433
             "$SDK/bin/linux/readelf" -h out/probe.elf
             "$SDK/bin/linux/readelf" -l out/probe.elf
-            cp "$SDK/bin/data/param.sfo" out/pkgroot/sce_sys/param.sfo
             TOOL="$SDK/bin/linux/PkgTool.Core"
-            "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
-            "$TOOL" sfo_setentry --value "PS2 Disc Probe" out/pkgroot/sce_sys/param.sfo TITLE
-            "$TOOL" sfo_setentry --value "IV0000-BREW00991_00-PS2DISCPROBE0000" out/pkgroot/sce_sys/param.sfo CONTENT_ID
-            "$TOOL" sfo_setentry --value "BREW00991" out/pkgroot/sce_sys/param.sfo TITLE_ID
+            "$TOOL" sfo_new out/pkgroot/sce_sys/param.sfo
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo APP_TYPE --type Integer --maxsize 4 --value 1
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo APP_VER --type Utf8 --maxsize 8 --value "01.00"
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo ATTRIBUTE --type Integer --maxsize 4 --value 0
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo CATEGORY --type Utf8 --maxsize 4 --value "gd"
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo CONTENT_ID --type Utf8 --maxsize 48 --value "IV0000-BREW00991_00-PS2DISCPROBE0000"
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo DOWNLOAD_DATA_SIZE --type Integer --maxsize 4 --value 0
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo SYSTEM_VER --type Integer --maxsize 4 --value 0
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo TITLE --type Utf8 --maxsize 128 --value "PS2 Disc Probe"
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo TITLE_ID --type Utf8 --maxsize 12 --value "BREW00991"
+            "$TOOL" sfo_setentry out/pkgroot/sce_sys/param.sfo VERSION --type Utf8 --maxsize 8 --value "01.00"
             "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
             cat > out/disc-probe.gp4 <<EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -59,6 +66,7 @@ jobs:
             <files img_no="0">
               <file targ_path="eboot.bin" orig_path="pkgroot/eboot.bin"/>
               <file targ_path="sce_sys/param.sfo" orig_path="pkgroot/sce_sys/param.sfo"/>
+              <file targ_path="sce_sys/icon0.png" orig_path="pkgroot/sce_sys/icon0.png"/>
               <file targ_path="sce_module/libc.prx" orig_path="pkgroot/sce_module/libc.prx"/>
               <file targ_path="sce_module/libSceFios2.prx" orig_path="pkgroot/sce_module/libSceFios2.prx"/>
             </files>
@@ -79,3 +87,5 @@ jobs:
             out/*.gp4
             out/probe.elf
             out/pkgroot/eboot.bin
+            out/pkgroot/sce_sys/param.sfo
+            out/pkgroot/sce_sys/icon0.png
