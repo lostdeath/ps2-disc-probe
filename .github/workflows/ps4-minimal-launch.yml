@@ -16,6 +16,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
+          python3 scripts/generate_icon.py out/minpkg/sce_sys/icon0.png
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
             set -euo pipefail
             SDK=/lib/OpenOrbisSDK
@@ -60,6 +61,7 @@ jobs:
             <files img_no="0">
               <file targ_path="eboot.bin" orig_path="minpkg/eboot.bin"/>
               <file targ_path="sce_sys/param.sfo" orig_path="minpkg/sce_sys/param.sfo"/>
+              <file targ_path="sce_sys/icon0.png" orig_path="minpkg/sce_sys/icon0.png"/>
               <file targ_path="sce_module/libc.prx" orig_path="minpkg/sce_module/libc.prx"/>
               <file targ_path="sce_module/libSceFios2.prx" orig_path="minpkg/sce_module/libSceFios2.prx"/>
             </files>
@@ -81,3 +83,4 @@ jobs:
             out/*.gp4
             out/minimal.elf
             out/minpkg/eboot.bin
+            out/minpkg/sce_sys/icon0.png
