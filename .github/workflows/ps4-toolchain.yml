@@ -1,0 +1,30 @@
+name: PS4 OpenOrbis Toolchain Check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-toolchain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate disc probe source on runner
+        run: |
+          make CC=gcc CFLAGS="-std=c11 -Wall -Wextra -Wpedantic -Werror -O2"
+      - name: Pull OpenOrbis toolchain image
+        run: docker pull openorbisofficial/toolchain:latest
+      - name: Inspect compiler and packaging tools
+        run: |
+          docker run --rm openorbisofficial/toolchain:latest bash -lc '
+            set -eu
+            echo "Toolchain environment:"
+            printenv | grep -E "OO_PS4|ORBIS|PATH" || true
+            echo "Available compilers:"
+            command -v clang || true
+            command -v orbis-clang || true
+            echo "Available packagers:"
+            command -v PkgTool.Core || true
+            find / -maxdepth 5 \( -name "orbis-clang" -o -name "PkgTool.Core" -o -name "create-fself" \) -print 2>/dev/null | head -40 || true
+          '
+      - name: Report status
+        run: echo "Toolchain image inspection finished. This workflow does not yet produce a PS4 PKG."
