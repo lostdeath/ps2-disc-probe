@@ -12,7 +12,7 @@ jobs:
         run: |
           docker pull openorbisofficial/toolchain:latest
           mkdir -p out
-          docker run --rm -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
             set -euxo pipefail
             SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
             echo "SDK=$SDK"
