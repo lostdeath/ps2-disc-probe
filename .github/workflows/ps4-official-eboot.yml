@@ -1,0 +1,68 @@
+name: PS4 Official Link and EBOOT Build
+on:
+  push:
+    paths:
+      - .github/workflows/ps4-official-eboot.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build using the official OpenOrbis linker script
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -uo pipefail
+            SDK=/lib/OpenOrbisSDK
+            export OO_PS4_TOOLCHAIN="$SDK"
+            if [ ! -f "$SDK/link.x" ]; then
+              echo "ERROR: official link.x not in Docker SDK"
+              exit 2
+            fi
+            printf "int main(void) { return 0; }\n" > out/minimal.c
+            cat > out/process_param.c <<EOF
+          __attribute__((used,section(".data.sce_process_param"),aligned(8)))
+          unsigned long long ps2_probe_process_param[3] = {
+            0x18ULL, 0x13C13F4BFULL, 0x1000051ULL
+          };
+          EOF
+            cc=(clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$SDK" -isystem "$SDK/include")
+            "${cc[@]}" -c out/minimal.c -o out/minimal.o || exit 3
+            "${cc[@]}" -c src/disc_probe.c -o out/probe.o || exit 3
+            "${cc[@]}" -c out/process_param.c -o out/process_param.o || exit 3
+            successes=0
+            for input in minimal probe; do
+              echo "=== Official-link $input ==="
+              ld.lld -m elf_x86_64 -pie --script "$SDK/link.x" --eh-frame-hdr -L"$SDK/lib" \
+                "out/$input.o" -o "out/$input.elf" -lc -lkernel -lc++ "$SDK/lib/crt1.o" || continue
+              if ! readelf -SW "out/$input.elf" | grep -F ".data.sce_process_param"; then
+                echo "Missing process param; relinking with explicit section."
+                ld.lld -m elf_x86_64 -pie --script "$SDK/link.x" --eh-frame-hdr -L"$SDK/lib" \
+                  "out/$input.o" out/process_param.o -o "out/$input.elf" -lc -lkernel -lc++ "$SDK/lib/crt1.o" || continue
+              fi
+              echo "=== Check official ELF: $input ==="
+              readelf -hW "out/$input.elf" | grep -E "Type:|Machine:|Entry point|program headers"
+              readelf -SW "out/$input.elf" | grep -E "sce_process_param|\.text|\.dynamic|\.got|\.data|\.bss" || true
+              echo "=== Convert EBOOT $input ==="
+              if "$SDK/bin/linux/create-eboot" -in "out/$input.elf" -out "out/$input.eboot.bin" -ptype fake; then
+                test -s "out/$input.eboot.bin" || continue
+                echo "EBOOT_SUCCESS: $input"
+                successes=$((successes+1))
+              else
+                echo "EBOOT_FAILED: $input"
+              fi
+            done
+            echo "Successful EBOOT conversions: $successes"
+            test "$successes" -eq 2
+          ' 2>&1 | tee out/official-eboot-build.log
+      - name: Upload ELF and EBOOT artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ps4-official-eboot-results
+          path: out/
