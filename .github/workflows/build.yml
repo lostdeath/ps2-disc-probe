@@ -1,0 +1,37 @@
+name: Build PS4 Disc Diagnostic
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Build PS4 diagnostic PKG
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: v0.5.1
+          command: |
+            set -e
+            git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git toolchain-src
+            cp disc_probe.cpp toolchain-src/samples/hello_world/main.cpp
+            cd toolchain-src/samples/hello_world
+            make
+            PkgTool.Core pkg_build pkg/pkg.gp4 .
+
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-disc-diagnostic
+          path: toolchain-src/samples/hello_world/*.pkg
+          if-no-files-found: error
