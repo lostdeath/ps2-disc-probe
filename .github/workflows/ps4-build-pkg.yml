@@ -29,7 +29,9 @@ jobs:
             mkdir -p out/pkgroot/sce_sys out/pkgroot/sce_module
             cp "$SDK/bin/data/modules/libc.prx" out/pkgroot/sce_module/libc.prx
             cp "$SDK/bin/data/modules/libSceFios2.prx" out/pkgroot/sce_module/libSceFios2.prx
-            "$SDK/bin/linux/create-fself" -in=out/probe.elf -out=out/probe.oelf --eboot out/pkgroot/eboot.bin --paid 0x3800000000000011
+            "$SDK/bin/linux/create-eboot" -in out/probe.elf -out out/pkgroot/eboot.bin -ptype fake -paid 4035225266123964433
+            "$SDK/bin/linux/readelf" -h out/probe.elf
+            "$SDK/bin/linux/readelf" -l out/probe.elf
             cp "$SDK/bin/data/param.sfo" out/pkgroot/sce_sys/param.sfo
             TOOL="$SDK/bin/linux/PkgTool.Core"
             "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
