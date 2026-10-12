@@ -1,0 +1,23 @@
+name: PS4 FSELF Tool Check
+on:
+  push:
+    paths:
+      - .github/workflows/ps4-fself-tool-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect available EBOOT and FSELF tools
+        run: |
+          docker run --rm openorbisofficial/toolchain:latest bash -lc '
+            set -eu
+            echo "SDK tools:"
+            ls -la /lib/OpenOrbisSDK/bin/linux
+            echo "FSELF candidates:"
+            find /lib/OpenOrbisSDK -iname "*fself*" -o -iname "*eboot*" | head -80
+            echo "EBOOT help:"
+            /lib/OpenOrbisSDK/bin/linux/create-eboot --help 2>&1 || true
+          '
