@@ -1,0 +1,42 @@
+name: PS4 ELF Section Diagnosis
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare ELF linking strategies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            echo "=== CRT OBJECTS ==="
+            ls -l "$SDK/lib/"{crt1.o,Scrt1.o,crti.o,crtn.o} || true
+            echo "=== CURRENT ELF SECTION HEADERS ==="
+            /usr/bin/ld.lld -m elf_x86_64 -o out/current.elf -e main out/disc_probe_ps4.o -L"$SDK/lib" -lc -lkernel
+            readelf -SW out/current.elf
+            echo "=== CURRENT ELF PROGRAM HEADERS ==="
+            readelf -lW out/current.elf
+            echo "=== CURRENT ELF SYMBOLS ==="
+            readelf -Ws out/current.elf | grep -E "main|_start|sce" | head -60 || true
+            echo "=== CRT ENTRY SYMBOLS ==="
+            nm "$SDK/lib/crt1.o" 2>/dev/null | head -40 || true
+            echo "=== OPENORBIS TOOLCHAIN CANDIDATES ==="
+            find "$SDK/bin" -maxdepth 3 -type f | grep -E "(link|clang|eboot|elf|make)" | head -70 || true
+            echo "Diagnostic only; ELF layout requires correction before create-eboot."
+          ' 2>&1 | tee out/elf-section-diagnosis.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-elf-section-diagnosis
+          path: out/
