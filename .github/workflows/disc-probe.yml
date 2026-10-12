@@ -1,0 +1,28 @@
+name: Disc Probe CI
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile probe with strict warnings
+        run: make CC=gcc CFLAGS="-std=c11 -Wall -Wextra -Wpedantic -Werror -O2"
+      - name: Test against synthetic PS2-style disc folder
+        run: |
+          mkdir -p /tmp/ps2-probe-test
+          printf '[SYSTEM]\nBOOT2 = cdrom0:\\SLUS_123.45;1\n' > /tmp/ps2-probe-test/SYSTEM.CNF
+          touch /tmp/ps2-probe-test/SLUS_123.45
+          ./disc-probe /tmp/ps2-probe-test | tee /tmp/probe.log
+          grep -q 'PS2 marker.*SYSTEM.CNF' /tmp/probe.log
+          grep -q 'PS2 marker.*SLUS_123.45' /tmp/probe.log
+      - name: Upload Linux test binary and log
+        uses: actions/upload-artifact@v4
+        with:
+          name: disc-probe-linux-test-only
+          path: |
+            disc-probe
+            /tmp/probe.log
