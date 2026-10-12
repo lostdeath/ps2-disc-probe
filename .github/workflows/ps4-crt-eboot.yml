@@ -1,0 +1,41 @@
+name: PS4 CRT EBOOT Conversion Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link with PS4 startup and try EBOOT conversion
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/OpenOrbisSDK}"
+            echo "SDK=$SDK"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            echo "=== LINK WITH CRT ==="
+            /usr/bin/ld.lld -m elf_x86_64 -pie -e _start -o out/disc_probe_crt.elf "$SDK/lib/crt1.o" "$SDK/lib/crti.o" out/disc_probe_ps4.o -L"$SDK/lib" -lc -lkernel "$SDK/lib/crtn.o"
+            echo "=== ELF HEADER ==="
+            /usr/bin/readelf -hW out/disc_probe_crt.elf
+            echo "=== SECTION HEADERS ==="
+            /usr/bin/readelf -SW out/disc_probe_crt.elf
+            echo "=== PROGRAM HEADERS ==="
+            /usr/bin/readelf -lW out/disc_probe_crt.elf
+            echo "=== EBOOT CONVERSION ==="
+            "$SDK/bin/linux/create-eboot" -in out/disc_probe_crt.elf -out out/eboot.bin -ptype fake
+            test -s out/eboot.bin
+            ls -lh out/eboot.bin
+          ' 2>&1 | tee out/crt-eboot-log.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload diagnostic outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-crt-eboot-experiment
+          path: out/
