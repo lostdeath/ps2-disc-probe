@@ -1,0 +1,42 @@
+name: PS4 Test PKG Build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build PS4 disc probe and attempt PKG packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK=/lib/OpenOrbisSDK
+            clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$SDK" -isystem "$SDK/include" -c src/disc_probe.c -o out/probe.o
+            cat > out/process_param.c <<EOF
+          __attribute__((used,section(".data.sce_process_param"),aligned(8)))
+          unsigned long long ps2_probe_process_param[3] = {0x18ULL,0x13C13F4BFULL,0x1000051ULL};
+          EOF
+            clang --target=x86_64-pc-freebsd12-elf -fPIC -isysroot "$SDK" -c out/process_param.c -o out/process_param.o
+            ld.lld -m elf_x86_64 -pie --script "$SDK/link.x" --eh-frame-hdr -L"$SDK/lib" out/probe.o out/process_param.o -o out/probe.elf -lc -lkernel -lc++ "$SDK/lib/crt1.o"
+            "$SDK/bin/linux/create-eboot" -in out/probe.elf -out out/eboot.bin -ptype fake
+            test -s out/eboot.bin
+            echo "EBOOT built successfully"
+            echo "Available packaging tools:"
+            find "$SDK/bin" -maxdepth 3 -type f \( -iname "*pkg*" -o -iname "*param*" -o -iname "*sfo*" \) -print || true
+            if [ -x "$SDK/bin/linux/create-pkg" ]; then
+              echo "create-pkg found; inspect supported arguments before packaging"
+              "$SDK/bin/linux/create-pkg" --help || true
+            else
+              echo "No create-pkg executable at expected path; PKG not yet produced"
+            fi
+          '
+      - name: Upload EBOOT and packaging diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-test-pkg-preparation
+          path: out/
