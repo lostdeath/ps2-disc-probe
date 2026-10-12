@@ -1,0 +1,36 @@
+name: PS4 Link Experiment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  link-experiment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and attempt PS4 link with OpenOrbis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            test -s out/disc_probe_ps4.o
+            echo "Object compiled; inspecting SDK libraries and linker"
+            ls "$SDK/lib" | head -40
+            command -v ld.lld || true
+            echo "Attempting link; failures here are diagnostic and will fail the workflow"
+            clang -target x86_64-scei-ps4 -fuse-ld=lld -L"$SDK/lib" out/disc_probe_ps4.o -o out/disc_probe_ps4.elf
+            test -s out/disc_probe_ps4.elf
+            echo "Linked PS4 ELF candidate successfully; not yet a loadable homebrew or PKG"
+          ' 2>&1 | tee out/link.log
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-link-experiment-not-pkg
+          path: out/
