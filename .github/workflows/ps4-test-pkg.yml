@@ -13,7 +13,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          docker run --rm -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
             set -euo pipefail
             SDK=/lib/OpenOrbisSDK
             clang --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -isysroot "$SDK" -isystem "$SDK/include" -c src/disc_probe.c -o out/probe.o
