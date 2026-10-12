@@ -1,0 +1,44 @@
+name: PS4 Converter Baseline Diagnostics
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare OpenOrbis converter inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -u
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/OpenOrbisSDK}"
+            echo "=== SDK tool and samples ==="
+            ls -la "$SDK/bin/linux" | head -45
+            find "$SDK" -maxdepth 4 \( -name "*.elf" -o -name "*.bin" -o -name "*.prx" \) | head -50
+            echo "=== Compile baseline ==="
+            printf "int main(void) { return 0; }\n" > out/minimal.c
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -c out/minimal.c -o out/minimal.o || exit 1
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -c src/disc_probe.c -o out/probe.o || exit 1
+            for input in minimal probe; do
+              echo "=== $input ELF ==="
+              /usr/bin/ld.lld -m elf_x86_64 -pie -e _start -o "out/$input.elf" "$SDK/lib/crt1.o" "$SDK/lib/crti.o" "out/$input.o" -L"$SDK/lib" -lc -lkernel "$SDK/lib/crtn.o" || continue
+              readelf -hW "out/$input.elf" || true
+              readelf -SW "out/$input.elf" || true
+              readelf -lW "out/$input.elf" || true
+              readelf -dW "out/$input.elf" || true
+              echo "=== $input conversion ==="
+              "$SDK/bin/linux/create-eboot" -in "out/$input.elf" -out "out/$input.eboot.bin" -ptype fake || true
+            done
+            echo "=== Converter library strings (relevant only) ==="
+            strings "$SDK/bin/linux/create-eboot" | grep -Ei "section|orbis|sce|fself|elf" | head -80 || true
+          ' 2>&1 | tee out/converter-diagnostics.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ps4-converter-diagnostics
+          path: out/
