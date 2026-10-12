@@ -1,0 +1,41 @@
+name: PS4 Executable Format Inspection
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and inspect ELF format
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
+            /usr/bin/ld.lld -m elf_x86_64 -o out/disc_probe_ps4.elf -e main out/disc_probe_ps4.o -L"$SDK/lib" -lc -lkernel
+            test -s out/disc_probe_ps4.elf
+            echo "=== ELF HEADER ==="
+            readelf -h out/disc_probe_ps4.elf
+            echo "=== PROGRAM HEADERS ==="
+            readelf -l out/disc_probe_ps4.elf
+            echo "=== DYNAMIC DEPENDENCIES ==="
+            readelf -d out/disc_probe_ps4.elf || true
+            echo "=== UNRESOLVED SYMBOLS ==="
+            readelf -Ws out/disc_probe_ps4.elf | grep " UND " || true
+            echo "=== AVAILABLE SDK PACKAGING TOOLS ==="
+            find "$SDK/bin" -maxdepth 3 -type f \( -iname "*elf*" -o -iname "*pkg*" -o -iname "*eboot*" \) -print || true
+            echo "This is a diagnostic ELF, not a verified PS4 executable or PKG."
+          ' 2>&1 | tee out/format-report.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload inspection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-format-inspection-not-pkg
+          path: out/
