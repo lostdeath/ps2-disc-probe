@@ -33,7 +33,8 @@ jobs:
             "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
             "$TOOL" sfo_setentry --value "PS2 Disc Probe" out/pkgroot/sce_sys/param.sfo TITLE
             "$TOOL" sfo_setentry --value "UP0001-PS2DPROBE_00-PS2DISCPROBE0000" out/pkgroot/sce_sys/param.sfo CONTENT_ID
-            "$TOOL" sfo_setentry --value "PS2D00001" out/pkgroot/sce_sys/param.sfo TITLE_ID
+            "$TOOL" sfo_setentry --value "PS2DPROBE" out/pkgroot/sce_sys/param.sfo TITLE_ID
+            "$TOOL" sfo_listentries out/pkgroot/sce_sys/param.sfo
             cat > out/disc-probe.gp4 <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <psproject fmt="gp4" version="1000">
