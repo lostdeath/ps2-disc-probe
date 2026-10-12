@@ -1,0 +1,38 @@
+name: PS4 EBOOT Tool Inspection
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect PS4 EBOOT and PKG utilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker pull openorbisofficial/toolchain:latest
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            set -euo pipefail
+            SDK="${OO_PS4_TOOLCHAIN:-/lib/orbis-sdk}"
+            echo "=== TOOL LOCATIONS ==="
+            ls -l "$SDK/bin/linux/create-eboot" "$SDK/bin/linux/PkgTool.Core"
+            echo "=== EBOOT HELP (may exit nonzero) ==="
+            timeout 15 "$SDK/bin/linux/create-eboot" --help || true
+            echo "=== EBOOT NO-ARG USAGE (may exit nonzero) ==="
+            timeout 15 "$SDK/bin/linux/create-eboot" || true
+            echo "=== PKG HELP (may exit nonzero) ==="
+            timeout 15 "$SDK/bin/linux/PkgTool.Core" --help || true
+            echo "=== SDK TEMPLATE/CONFIG CANDIDATES ==="
+            find "$SDK" -maxdepth 4 -type f \( -name "*.gp4" -o -name "param.sfo" -o -name "*.json" -o -name "*.xml" \) | head -60 || true
+            echo "Inspection only: no installable PKG produced."
+          ' 2>&1 | tee out/tool-inspection.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Upload inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps4-eboot-tool-inspection
+          path: out/
