@@ -20,8 +20,11 @@ jobs:
             clang --version
             # Compile only: linking and packaging need a PS4-specific entrypoint and libraries.
             clang -target x86_64-scei-ps4 -isystem "$SDK/include" -std=c11 -Wall -Wextra -c src/disc_probe.c -o out/disc_probe_ps4.o
-            file out/disc_probe_ps4.o
+            test -s out/disc_probe_ps4.o
+            ls -l out/disc_probe_ps4.o
+            echo "PS4 object file created successfully"
           ' 2>&1 | tee out/compile.log
+          test ${PIPESTATUS[0]} -eq 0
       - name: Upload compile log and object if available
         if: always()
         uses: actions/upload-artifact@v4
