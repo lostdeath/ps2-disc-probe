@@ -1,38 +1,26 @@
-name: Build PS4 Test Package
-
+name: PS4 Build Preparation
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  build:
+  validate-source:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download OpenOrbis toolchain samples
+      - uses: actions/checkout@v4
+      - name: Compile portable disc probe
+        run: make CC=gcc CFLAGS="-std=c11 -Wall -Wextra -Wpedantic -Werror -O2"
+      - name: Verify source recognizes PS2 disc markers
         run: |
-          git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git toolchain-src
-
-      - name: Build and package sample
-        run: |
-          set -e
-          docker run --rm \
-            -w /workspace \
-            -v "$GITHUB_WORKSPACE/toolchain-src/samples:/workspace" \
-            openorbisofficial/toolchain:latest \
-            bash -c 'cd hello_world && make && PkgTool.Core pkg_build pkg/pkg.gp4 .'
-
-      - name: Upload PKG
+          mkdir -p test-disc
+          touch test-disc/SYSTEM.CNF test-disc/SLUS_123.45
+          ./disc-probe test-disc | tee probe-results.txt
+          grep -q 'PS2 marker.*SYSTEM.CNF' probe-results.txt
+          grep -q 'PS2 marker.*SLUS_123.45' probe-results.txt
+      - name: Upload validation results
         uses: actions/upload-artifact@v4
         with:
-          name: ps4-test-package
-          path: toolchain-src/samples/hello_world/*.pkg
-          if-no-files-found: error
+          name: source-validation-not-a-ps4-pkg
+          path: probe-results.txt
