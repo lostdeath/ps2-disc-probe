@@ -1,0 +1,36 @@
+name: PS4 EBOOT ABI Diagnostics
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect SDK link scripts and ELF ABI
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          docker run --rm -v "$PWD:/work" -w /work openorbisofficial/toolchain:latest bash -lc '
+            SDK=/lib/OpenOrbisSDK
+            echo "=== SDK linker documentation and scripts ==="
+            find "$SDK" -maxdepth 5 \( -iname "*link*" -o -name "*.ld" -o -name "*.mk" -o -name "*.cmake" \) | head -90
+            echo "=== CRT metadata ==="
+            for f in crt1.o Scrt1.o rcrt1.o; do
+              echo "--- $f ---"
+              readelf -hW "$SDK/lib/$f" | grep -E "Type:|Machine:|OS/ABI:" || true
+              readelf -SW "$SDK/lib/$f" | grep -E "sce|orbis|dynamic|note|rodata|text" || true
+            done
+            echo "=== SDK examples ==="
+            find "$SDK" -maxdepth 6 \( -name "*.elf" -o -name "*.self" -o -name "*.prx" \) | head -60
+            echo "=== Converter usage ==="
+            "$SDK/bin/linux/create-eboot" -h || true
+            echo "=== Converter validation symbols ==="
+            strings "$SDK/bin/linux/create-eboot" | grep -E "sce|SCE|SectionByType|ValidateInputELF|non-existent section" | head -110 || true
+          ' 2>&1 | tee out/abi-diagnostics.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ps4-abi-diagnostics
+          path: out/
